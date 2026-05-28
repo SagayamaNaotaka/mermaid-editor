@@ -1,6 +1,6 @@
 const CACHE_NAME = 'mermaid-editor-v1';
 const ASSETS = [
-  '/mermaid-editor/index.html',
+  '/mermaid_editor/index.html',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js',
   'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap'
