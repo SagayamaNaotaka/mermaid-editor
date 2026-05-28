@@ -2,7 +2,7 @@
   "name": "Mermaid Editor",
   "short_name": "Mermaid",
   "description": "シンプルなMermaidフローチャートエディタ",
-  "start_url": "/mermaid-editor/index.html",
+  "start_url": "/mermaid_editor/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#f7f6f3",
