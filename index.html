@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mermaid">
+<title>Mermaid Editor</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mermaid">
+<meta name="theme-color" content="#f7f6f3">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.6.1/mermaid.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --surface: #f7f6f3; --surface2: #efede9;
+    --border: #e0ddd8; --accent: #c8442a; --accent-dim: #f0e8e5;
+    --text: #1a1a1a; --text-dim: #9b9b9b;
+    --ok: #c8442a; --err: #e05a3a;
+    --header-h: 48px; --toolbar-h: 44px;
+  }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; letter-spacing: 0.01em; }
+  body { display: flex; flex-direction: column; }
+
+  #header {
+    height: var(--header-h); background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; position: relative; z-index: 10;
+  }
+  #logo {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #status { font-size: 11px; font-family: 'JetBrains Mono', monospace; display: flex; align-items: center; gap: 6px; }
+  #status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent); box-shadow: none;
+    transition: background 0.2s;
+  }
+  #status-dot.loading { background: #e8a020; box-shadow: none; animation: pulse 1s infinite; }
+  #status-dot.err { background: var(--err); box-shadow: 0 0 6px var(--err); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  #status-text { color: var(--text-dim); }
+
+  .tb-btn {
+    height: 30px; padding: 0 11px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 2px; color: var(--text); font-size: 11px;
+    font-family: 'DM Sans', sans-serif; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    display: flex; align-items: center; gap: 5px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tb-btn:hover, .tb-btn:active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .tb-sep { width: 1px; height: 20px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+
+  #main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #editor-pane {
+    display: flex; flex-direction: column;
+    width: 50%; min-width: 0;
+    border-right: 1px solid var(--border);
+  }
+  #editor-label, #preview-label {
+    font-size: 10px; font-family: 'DM Sans', sans-serif;
+    color: var(--text-dim); letter-spacing: 0.14em; text-transform: uppercase;
+    padding: 6px 12px 4px; border-bottom: 1px solid var(--border);
+    background: var(--surface); flex-shrink: 0;
+  }
+  #editor {
+    flex: 1; width: 100%; border: none; outline: none;
+    background: #f7f6f3; color: #37352f;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7;
+    padding: 14px 16px; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    caret-color: var(--accent); tab-size: 2;
+    white-space: pre-wrap; word-break: break-all;
+    cursor: text;
+  }
+  #editor::selection { background: #ffd9d0; }
+  #editor:empty::before {
+    content: 'flowchart TD';
+    color: var(--text-dim);
+  }
+
+  #preview-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #preview-scroll {
+    flex: 1; overflow-y: auto; overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px; position: relative;
+    background: #f7f6f3;
+  }
+  #preview-inner {
+    width: 100%;
+  }
+  #preview-inner svg { max-width: 100%; height: auto; }
+
+  #error-box {
+    display: none; position: absolute; bottom: 12px; left: 12px; right: 12px;
+    background: rgba(248,113,113,0.1); border: 1px solid var(--err);
+    border-radius: 8px; padding: 10px 12px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    color: var(--err); line-height: 1.5; z-index: 5;
+  }
+
+  #divider {
+    width: 4px; background: var(--border); cursor: col-resize;
+    flex-shrink: 0; transition: background 0.15s;
+  }
+  #divider:hover { background: var(--accent); }
+
+  /* タブUI（スマホ専用） */
+  #tab-bar { display: none; }
+
+  @media (max-width: 640px) {
+    #tab-bar {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      flex: 1; height: 40px;
+      background: none; border: none;
+      font-size: 11px; font-family: 'DM Sans', sans-serif;
+      font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--text-dim); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    #main { flex-direction: column; }
+    #editor-pane { width: 100%; flex: 1; border-right: none; min-height: 0; }
+    #divider { display: none; }
+    #preview-pane { flex: 1; min-height: 0; }
+    #editor-pane.tab-hidden { display: none; }
+    #preview-pane.tab-hidden { display: none; }
+    #editor { font-size: 13px; padding: 12px 14px; }
+  }
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 16px; font-size: 13px; color: var(--text);
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 100; white-space: nowrap; pointer-events: none;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="logo">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M2 4h12M2 8h8M2 12h10" stroke="#7c6af7" stroke-width="1.5" stroke-linecap="round"/>
+      <circle cx="13" cy="8" r="2" fill="#7c6af7"/>
+    </svg>
+    mermaid editor
+  </div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button onclick="copyCode()" style="height:26px; padding:0 10px; background:none; border:1px solid var(--border); border-radius:2px; color:var(--text-dim); font-size:10px; font-family:'DM Sans',sans-serif; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; -webkit-tap-highlight-color:transparent;">Copy</button>
+    <div id="status">
+      <div id="status-dot"></div>
+      <span id="status-text">ready</span>
+    </div>
+  </div>
+</div>
+
+
+
+<div id="tab-bar">
+  <button class="tab-btn active" id="tab-code" onclick="switchTab('code')">Code</button>
+  <button class="tab-btn" id="tab-preview" onclick="switchTab('preview')">Preview</button>
+</div>
+
+<div id="main">
+  <div id="editor-pane">
+    <div id="editor-label">code</div>
+    <div id="editor" contenteditable="true" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="off"></div>
+  </div>
+  <div id="divider"></div>
+  <div id="preview-pane">
+    <div id="preview-label">preview</div>
+    <div id="preview-scroll">
+      <div id="preview-inner"></div>
+      <div id="error-box"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const DEFAULT = `flowchart TD`;
+const LS_KEY = 'mermaid-editor-v1';
+
+const editorEl = document.getElementById('editor');
+const previewInner = document.getElementById('preview-inner');
+const errorBox = document.getElementById('error-box');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+
+// contentEditable用ヘルパー
+function getCode() { return editorEl.innerText || ''; }
+function setCode(text) {
+  editorEl.innerText = text;
+}
+
+// Load saved or default
+let saved = null;
+try { saved = localStorage.getItem(LS_KEY); } catch(e) {}
+setCode(saved || DEFAULT);
+
+// ── RENDER (mermaid.js優先、失敗時はAPI fallback) ──
+let renderTimer = null;
+let renderCount = 0;
+let mermaidReady = false;
+
+function initMermaid() {
+  if (typeof mermaid === 'undefined') return false;
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      darkMode: false,
+      securityLevel: 'loose',
+      suppressErrorRendering: true,
+      fontFamily: 'JetBrains Mono, monospace',
+      themeVariables: {
+        primaryColor: '#f7f6f3',
+        primaryTextColor: '#37352f',
+        primaryBorderColor: '#37352f',
+        lineColor: '#37352f',
+        background: '#ffffff',
+        mainBkg: '#f7f6f3',
+        nodeBorder: '#37352f',
+        clusterBkg: '#efede9',
+        titleColor: '#37352f',
+        edgeLabelBackground: '#ffffff',
+        fontSize: '14px',
+        lineWidth: 1.5,
+        nodeBorderWidth: 1.5,
+      }
+    });
+    mermaidReady = true;
+    return true;
+  } catch(e) { return false; }
+}
+initMermaid();
+
+async function renderWithMermaid(code) {
+  if (!mermaidReady && !initMermaid()) throw new Error('mermaid not available');
+  const id = 'mermaid-' + (++renderCount);
+  try {
+    const { svg } = await mermaid.render(id, code);
+    document.getElementById(id)?.remove();
+    // mermaidが挿入したエラー表示をクリーンアップ
+    document.querySelectorAll('[id^="mermaid-"]').forEach(el => el.remove());
+    return svg;
+  } catch(e) {
+    // エラー表示をDOMから除去
+    document.getElementById(id)?.remove();
+    document.querySelectorAll('[id^="mermaid-"]').forEach(el => el.remove());
+    throw e;
+  }
+}
+
+async function renderWithAPI(code) {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 4096,
+      messages: [{
+        role: 'user',
+        content: `以下のMermaidコードをSVGに変換してください。SVGのみを返してください。説明文やコードブロック記号は不要です。<svg から始まり </svg> で終わるSVGのみ。背景:#16161a ノード:#1e1e24 線:#7c6af7 テキスト:#e8e8f0
+
+${code}`
+      }]
+    })
+  });
+  const data = await response.json();
+  const text = data.content?.map(b => b.text || '').join('') || '';
+  const m = text.match(/<svg[\s\S]*<\/svg>/i);
+  if (!m) throw new Error('SVGが返されませんでした');
+  return m[0];
+}
+
+async function render() {
+  const code = getCode().trim();
+  if (!code) { previewInner.innerHTML = ''; return; }
+
+  setStatus('loading', 'rendering...');
+  errorBox.style.display = 'none';
+
+  try {
+    let svg;
+    try {
+      svg = await renderWithMermaid(code);
+    } catch(e1) {
+      svg = await renderWithAPI(code);
+    }
+    previewInner.innerHTML = svg;
+    const svgEl = previewInner.querySelector('svg');
+    if (svgEl) {
+      // 矢印・線の太さをボックス枠と統一
+      const style = document.createElement('style');
+      style.textContent = '.edge path, .edge line, .flowchart-link { stroke-width: 1.5px !important; } .marker { stroke-width: 1.5px !important; }';
+      svgEl.appendChild(style);
+      // viewBoxがなければwidth/heightから生成
+      if (!svgEl.getAttribute('viewBox')) {
+        const w = parseFloat(svgEl.getAttribute('width')) || 800;
+        const h = parseFloat(svgEl.getAttribute('height')) || 600;
+        svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      }
+      // 幅はプレビューペイン全体、高さはautoで縦スクロール
+      svgEl.removeAttribute('width');
+      svgEl.removeAttribute('height');
+      svgEl.style.display = 'block';
+      svgEl.style.width = '100%';
+      svgEl.style.height = 'auto';
+      svgEl.style.minHeight = '200px';
+    }
+    setStatus('ok', 'ok');
+  } catch(e) {
+    setStatus('err', 'error');
+    // エラー表示はステータスドットのみ、爆弾は出さない
+    errorBox.style.display = 'none';
+    // mermaidがbodyに挿入したエラー要素を全て削除
+    document.querySelectorAll('[id^="mermaid-"]').forEach(el => el.remove());
+  }
+}
+
+function setStatus(state, msg) {
+  statusDot.className = state === 'ok' ? '' : state;
+  statusText.textContent = msg;
+}
+
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 250);
+}
+
+// ── TAB SWITCH (mobile) ──
+function switchTab(tab) {
+  const editorPane = document.getElementById('editor-pane');
+  const previewPane = document.getElementById('preview-pane');
+  const tabCode = document.getElementById('tab-code');
+  const tabPreview = document.getElementById('tab-preview');
+  if (!tabCode || !tabPreview) return;
+  if (tab === 'code') {
+    editorPane.classList.remove('tab-hidden');
+    previewPane.classList.add('tab-hidden');
+    tabCode.classList.add('active');
+    tabPreview.classList.remove('active');
+  } else {
+    editorPane.classList.add('tab-hidden');
+    previewPane.classList.remove('tab-hidden');
+    tabCode.classList.remove('active');
+    tabPreview.classList.add('active');
+
+  }
+}
+
+editorEl.addEventListener('input', () => {
+  try { localStorage.setItem(LS_KEY, getCode()); } catch(e) {}
+  scheduleRender();
+});
+
+// Initial render
+render();
+
+// スマホ時は初期タブをcodeに設定
+if (window.innerWidth <= 640) {
+  switchTab('code');
+}
+
+
+
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+
+
+// ── COPY ──
+function copyCode() {
+  navigator.clipboard.writeText(getCode()).then(() => showToast('コピーしました'));
+}
+
+// ── DIVIDER DRAG ──
+const divider = document.getElementById('divider');
+const editorPane = document.getElementById('editor-pane');
+let dragging = false, startX = 0, startW = 0;
+divider.addEventListener('mousedown', e => {
+  dragging = true; startX = e.clientX; startW = editorPane.offsetWidth;
+  document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+});
+document.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const total = document.getElementById('main').offsetWidth;
+  const newW = Math.max(200, Math.min(total - 200, startW + e.clientX - startX));
+  editorPane.style.width = newW + 'px';
+});
+document.addEventListener('mouseup', () => {
+  dragging = false; document.body.style.userSelect = ''; document.body.style.cursor = '';
+});
+
+// ── TAB / ENTER key ──
+let isComposing = false;
+editorEl.addEventListener('compositionstart', () => { isComposing = true; });
+editorEl.addEventListener('compositionend', () => { isComposing = false; });
+
+editorEl.addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    document.execCommand('insertText', false, '    ');
+    scheduleRender();
+  }
+  if (e.key === 'Enter' && !isComposing) {
+    e.preventDefault();
+    // 現在行のインデントを取得
+    const full = getCode();
+    const sel = window.getSelection();
+    const range = sel.getRangeAt(0);
+    // カーソル位置をテキスト全体での位置に変換
+    const preRange = document.createRange();
+    preRange.selectNodeContents(editorEl);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const pos = preRange.toString().length;
+    const lineStart = full.lastIndexOf('\n', pos - 1) + 1;
+    const currentLine = full.substring(lineStart, pos);
+    const indent = currentLine.match(/^([ \t]*)/)[1];
+    const newIndent = indent.length > 0 ? indent : '    ';
+    document.execCommand('insertText', false, '\n' + newIndent);
+    scheduleRender();
+  }
+});
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js');
+  });
+}
+</script>
+</body>
+</html>
