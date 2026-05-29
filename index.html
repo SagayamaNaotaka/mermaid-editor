@@ -170,6 +170,7 @@
     mermaid editor
   </div>
   <div style="display:flex; align-items:center; gap:10px;">
+    <button id="clear-btn" onclick="clearCode()" style="height:26px; padding:0 10px; background:none; border:1px solid var(--border); border-radius:2px; color:var(--text-dim); font-size:10px; font-family:'DM Sans',sans-serif; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; opacity:0.3; pointer-events:none; -webkit-tap-highlight-color:transparent; transition:opacity 0.15s;">Clear</button>
     <button onclick="copyCode()" style="height:26px; padding:0 10px; background:none; border:1px solid var(--border); border-radius:2px; color:var(--text-dim); font-size:10px; font-family:'DM Sans',sans-serif; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; cursor:pointer; -webkit-tap-highlight-color:transparent;">Copy</button>
     <div id="status">
       <div id="status-dot"></div>
@@ -377,6 +378,7 @@ function switchTab(tab) {
 
 editorEl.addEventListener('input', () => {
   try { localStorage.setItem(LS_KEY, getCode()); } catch(e) {}
+  updateClearBtn();
   scheduleRender();
 });
 
@@ -400,9 +402,33 @@ function showToast(msg) {
 
 
 
-// ── COPY ──
+// ── COPY / CLEAR ──
+let lastCopiedCode = null;
 function copyCode() {
-  navigator.clipboard.writeText(getCode()).then(() => showToast('コピーしました'));
+  const text = getCode();
+  navigator.clipboard.writeText(text).then(() => {
+    lastCopiedCode = text;
+    updateClearBtn();
+    showToast('コピーしました');
+  });
+}
+
+function updateClearBtn() {
+  const clearBtn = document.getElementById('clear-btn');
+  if (!clearBtn) return;
+  const canClear = lastCopiedCode !== null && lastCopiedCode === getCode();
+  clearBtn.style.opacity = canClear ? '1' : '0.3';
+  clearBtn.style.pointerEvents = canClear ? 'auto' : 'none';
+}
+
+function clearCode() {
+  setCode(DEFAULT);
+  try { localStorage.setItem(LS_KEY, DEFAULT); } catch(e) {}
+  lastCopiedCode = null;
+  updateClearBtn();
+  currentCode = '';
+  render();
+  showToast('クリアしました');
 }
 
 // ── DIVIDER DRAG ──
